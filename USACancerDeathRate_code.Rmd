@@ -1,0 +1,1179 @@
+---
+title: "USA Cancer Death Rate"
+output: html_notebook
+---
+
+###First dataset
+
+https://data.world/nrippner/ols-regression-challenge
+
+```{r}
+#Import File
+CancerRegRaw<-read.csv("C:/Users/bella/OneDrive/Project/cancer_reg.csv") #last version of one drive with Region_new column
+dim(CancerRegRaw) #3047   34 + 1
+str(CancerRegRaw) #two categoricals: binnedInc and Gegraphy + 1 New_region
+summary(CancerRegRaw)
+```
+
+###Second dataset and merging operation: OBS. we decided to not use it the information available with this second dataset at the end, but only the features of the first dataset.
+https://www.kaggle.com/GoogleNewsLab/health-searches-us-county/data
+
+New variable region created in excel because easier, from the abbreviation of state.
+Each row corresponds to a metropoly.
+
+```{r}
+library(readxl)
+Regionalinfo <- read_excel("~/Project/RegionalInterestByConditionOverTime.xlsx") #last version of one drive
+#str(Regionalinfo)
+Regionalinfo$Region_New=as.factor(Regionalinfo$Region_New)
+
+str(Regionalinfo$Region_New)  #46 levels
+str(CancerRegRaw$Region_new) #51 levels
+
+summary(Regionalinfo$Region_New)
+summary(CancerRegRaw$Region_new)
+
+```
+
+There are 46 levels and not 51 = 5 regions are not in the second file
+Delaware, District of Columbia, New Jersey, Rhode Island and Vermont are the one missing in the new dataset.
+
+Obs.the levels are not identified with the same number so when we merge we need to codified the factors as char otherwise we can't merge properly.
+
+Average along the years from 2010 to 2016 since the first dataset has some variables in these years (in particular, the target):
+
+```{r}
+#str(Regionalinfo)
+RegionalinfoAvg=matrix(0,nrow=210,ncol=9)
+Regionalinfo63=as.matrix(Regionalinfo[,1:63])
+
+for(j in 1:210){
+  
+  for(i in 1:9){
+    
+    RegionalinfoAvg[j,i]=(Regionalinfo63[j,i]+Regionalinfo63[j,i+9]+ Regionalinfo63[j,i+9+9]+ Regionalinfo63[j,i+9+9+9]+ Regionalinfo63[j,i+9+9+9+9]+ Regionalinfo63[j,i+9+9+9+9+9]+ Regionalinfo63[j,i+9+9+9+9+9+9])/6
+    
+  }
+  
+}
+RegionalinfoAvg=as.data.frame(RegionalinfoAvg)
+colnames(RegionalinfoAvg)=c("cancerAVG", "cardiovascularAVG","strokeAVG", "depressionAVG","rehabAVG", "vaccineAVG", "diarrheaAVG", "obesityAVG", "diabetesAVG")
+
+RegionalinfoAvg$Region_New=Regionalinfo$Region_New
+```
+
+RegionalinfoAvg is the new dataset with 10 variables with the averages word researches + Region_new
+
+
+Now the average for region:
+```{r}
+#table(RegionalinfoAvg$Region_New)
+RegionalinfoAvgReg=matrix(0,nrow=210,ncol=9)
+
+cancer=ave(RegionalinfoAvg$cancerAVG, RegionalinfoAvg$Region_New, FUN = mean)
+RegionalinfoAvgReg[,1]=cancer
+
+cardiovascular=ave(RegionalinfoAvg$cardiovascularAVG, RegionalinfoAvg$Region_New, FUN = mean)
+RegionalinfoAvgReg[,2]=cardiovascular
+
+stroke=ave(RegionalinfoAvg$strokeAVG, RegionalinfoAvg$Region_New, FUN = mean)
+RegionalinfoAvgReg[,3]=stroke
+
+depression=ave(RegionalinfoAvg$depressionAVG, RegionalinfoAvg$Region_New, FUN = mean)
+RegionalinfoAvgReg[,4]=depression
+
+rehab=ave(RegionalinfoAvg$rehabAVG, RegionalinfoAvg$Region_New, FUN = mean)
+RegionalinfoAvgReg[,5]=rehab
+
+vaccine=ave(RegionalinfoAvg$vaccineAVG, RegionalinfoAvg$Region_New, FUN = mean)
+RegionalinfoAvgReg[,6]=vaccine
+
+diarrhea=ave(RegionalinfoAvg$diarrheaAVG, RegionalinfoAvg$Region_New, FUN = mean)
+RegionalinfoAvgReg[,7]=diarrhea
+
+
+obesity=ave(RegionalinfoAvg$obesityAVG, RegionalinfoAvg$Region_New, FUN = mean)
+RegionalinfoAvgReg[,8]=obesity
+
+diabetes=ave(RegionalinfoAvg$diabetesAVG, RegionalinfoAvg$Region_New, FUN = mean)
+RegionalinfoAvgReg[,9]=diabetes
+
+
+RegionalinfoAvgReg=as.data.frame(RegionalinfoAvgReg)
+
+colnames(RegionalinfoAvgReg)=c("cancerAVG", "cardiovascularAVG","strokeAVG", "depressionAVG","rehabAVG", "vaccineAVG", "diarrheaAVG", "obesityAVG", "diabetesAVG")
+
+RegionalinfoAvgReg$New_Region=RegionalinfoAvg$Region_New
+
+#View(RegionalinfoAvgReg)
+```
+
+Delete the duplicates considering the regions:
+```{r}
+RegionalinfoAvgReg_withoutdup <- unique (RegionalinfoAvgReg)
+dim(RegionalinfoAvgReg_withoutdup)
+RegionalinfoAvgReg_withoutdup$New_Region
+
+library(xlsx)
+#write.xlsx(RegionalinfoAvgReg_withoutdup, "~/Project//RegionalinfoAvgReg_withoutdup.xlsx")
+```
+
+Create five new rows for the missing regions: Delaware, District of Columbia, New Jersey, Rhode Island and Vermont
+
+Delaware:  It is bordered to the south and west by Maryland, to the north by Pennsylvania, and to the east by New Jersey and the Atlantic Ocean
+
+District of Columbia: Washington is surrounded by the states of Virginia (on its southwest side) and Maryland (on its southeast, northeast, and northwest sides)
+
+New Jersey: New york, Pennsylvania, Delaware
+
+Rhode Island:  Rhode Island is bordered by Connecticut to the west, Massachusetts to the north and east, and the Atlantic Ocean to the south via Rhode Island Sound and Block Island Sound. It also shares a small maritime border with New York.[10] Providence is the state capital and most populous city in Rhode Island.
+
+Vermont:  It borders the U.S. states of Massachusetts to the south, New Hampshire to the east and New York to the west, and the Canadian province of Quebec to the north.
+
+```{r}
+RegionalinfoAvgReg_withoutdup$New_Region <- trimws(as.character(RegionalinfoAvgReg_withoutdup$New_Region))
+
+#Vermont
+BordersVermont=subset(RegionalinfoAvgReg_withoutdup, RegionalinfoAvgReg_withoutdup$New_Region== 'Massachusetts' | RegionalinfoAvgReg_withoutdup$New_Region=='New Hampshire' | RegionalinfoAvgReg_withoutdup$New_Region=='New York')
+BordersVermont=subset(BordersVermont, select=-New_Region)
+Verm=colMeans(BordersVermont)
+RegionalinfoAvgReg_withoutdup <- rbind(RegionalinfoAvgReg_withoutdup, Verm )
+RegionalinfoAvgReg_withoutdup[47, "New_Region"] <- 'Vermont'
+
+#Rhode Island
+BordersRhodeIsland=subset(RegionalinfoAvgReg_withoutdup, RegionalinfoAvgReg_withoutdup$New_Region== 'Connecticut' | RegionalinfoAvgReg_withoutdup$New_Region=='Massachusetts' | RegionalinfoAvgReg_withoutdup$New_Region=='New York')
+BordersRhodeIsland=subset(BordersRhodeIsland, select=-New_Region)
+RhodeIsland=colMeans(BordersRhodeIsland)
+RegionalinfoAvgReg_withoutdup <- rbind(RegionalinfoAvgReg_withoutdup, RhodeIsland )
+RegionalinfoAvgReg_withoutdup[48, "New_Region"] <-'Rhode Island'
+
+#District of Columbia
+BordersDistrictofColumbia=subset(RegionalinfoAvgReg_withoutdup, RegionalinfoAvgReg_withoutdup$New_Region=='Virginia' | RegionalinfoAvgReg_withoutdup$New_Region=='Maryland')
+BordersDistrictofColumbia=subset(BordersDistrictofColumbia, select=-New_Region)
+BordersDistrictofColumbia=colMeans(BordersDistrictofColumbia)
+RegionalinfoAvgReg_withoutdup <- rbind(RegionalinfoAvgReg_withoutdup, BordersDistrictofColumbia)
+RegionalinfoAvgReg_withoutdup[49, "New_Region"] <- 'District of Columbia'
+
+#Delware
+BordersDelware=subset(RegionalinfoAvgReg_withoutdup, RegionalinfoAvgReg_withoutdup$New_Region=='Pennsylvania' | RegionalinfoAvgReg_withoutdup$New_Region=='Maryland')
+BordersDelware=subset(BordersDelware, select=-New_Region)
+BordersDelware=colMeans(BordersDelware)
+RegionalinfoAvgReg_withoutdup <- rbind(RegionalinfoAvgReg_withoutdup, BordersDelware)
+RegionalinfoAvgReg_withoutdup[50, "New_Region"] <- 'Delaware'
+
+#New Jersey
+BordersNewJersey=subset(RegionalinfoAvgReg_withoutdup, RegionalinfoAvgReg_withoutdup$New_Region=='Pennsylvania' | RegionalinfoAvgReg_withoutdup$New_Region=='New York')
+BordersNewJersey=subset(BordersNewJersey, select=-New_Region)
+BordersNewJersey=colMeans(BordersNewJersey)
+RegionalinfoAvgReg_withoutdup <- rbind(RegionalinfoAvgReg_withoutdup, BordersNewJersey)
+RegionalinfoAvgReg_withoutdup[51, "New_Region"] <- 'New Jersey'
+
+str(RegionalinfoAvgReg_withoutdup)
+```
+
+51 rows and 10 variabeles, yes
+
+Obs. there will be max 51 different values for these variables when we merge with the first dataset, maybe it will be not so useful.
+
+Merging the two datasets:
+
+We need to merge the data frame called CancerRegRaw and the data frame called RegionalinfoAvgReg_withoutdup by region name.
+
+
+```{r}
+CancerRegRaw$New_Region=CancerRegRaw$Region_new
+CancerRegRaw$New_Region <- trimws(as.character(CancerRegRaw$New_Region))
+#str(CancerRegRaw$New_Region)
+final <- merge(CancerRegRaw,RegionalinfoAvgReg_withoutdup,by="New_Region")
+res1 <- CancerRegRaw [ !CancerRegRaw$New_Region %in% RegionalinfoAvgReg_withoutdup$New_Region ,] #to check that it is 0
+#write.xlsx(final, "~/Project//Merged.xlsx")
+```
+
+###Import file finalissimo
+
+```{r}
+# setwd("~/Project")
+# library(readxl)
+CancerRegRaw <- read_excel("Datasetfinalversion.xlsx") #in one drive
+CancerRegRaw$New_State=as.factor(CancerRegRaw$New_State)
+CancerRegRaw$Geography=as.factor(CancerRegRaw$Geography)
+CancerRegRaw$binnedInc=as.factor(CancerRegRaw$binnedInc)
+dim(CancerRegRaw) #3047   34 + 1
+str(CancerRegRaw) #two categoricals: binnedInc and Gegraphy + 1 New_region
+summary(CancerRegRaw)
+
+```
+
+
+###Histograms and boxplot for dataset's exploration
+```{r}
+par(mfrow=c(1,2))
+
+hist( CancerRegRaw$avgAnnCount, breaks = sqrt( length( CancerRegRaw$avgAnnCount ) ), probability = TRUE,
+      col = 'lavender', main = 'avgAnnCount', xlab = 'avgAnnCount' ) 
+boxplot(CancerRegRaw$avgAnnCount) 
+
+hist( CancerRegRaw$avgDeathsPerYear, breaks = sqrt( length( CancerRegRaw$avgDeathsPerYear ) ), probability = TRUE,
+      col = 'lavender', main = 'avgDeathsPerYear', xlab = 'avgDeathsPerYear' ) 
+boxplot(CancerRegRaw$avgDeathsPerYear)
+
+par(mfrow=c(1,2))
+hist( CancerRegRaw$TARGET_deathRate, breaks = sqrt( length( CancerRegRaw$TARGET_deathRate ) ), probability = TRUE,
+      col = 'lavender', main = 'TARGET_deathRate', xlab = 'TARGET_deathRate' ) 
+boxplot(CancerRegRaw$TARGET_deathRate)
+
+
+```
+
+
+```{r}
+par(mfrow=c(3,2))
+hist( CancerRegRaw$incidenceRate, breaks = sqrt( length( CancerRegRaw$incidenceRate ) ), probability = TRUE,
+      col = 'lavender', main = 'incidenceRate', xlab = 'incidenceRate' ) 
+boxplot(CancerRegRaw$incidenceRate)
+
+hist( CancerRegRaw$medIncome, breaks = sqrt( length( CancerRegRaw$medIncome ) ), probability = TRUE,
+      col = 'lavender', main = 'medIncome', xlab = 'medIncome' ) 
+boxplot(CancerRegRaw$medIncome)
+
+hist( CancerRegRaw$popEst2015, breaks = sqrt( length( CancerRegRaw$popEst2015 ) ), probability = TRUE,
+      col = 'lavender', main = 'popEst2015', xlab = 'popEst2015' ) 
+boxplot(CancerRegRaw$popEst2015)
+
+```
+```{r}
+par(mfrow=c(3,2))
+hist( CancerRegRaw$povertyPercent, breaks = sqrt( length( CancerRegRaw$povertyPercent ) ), probability = TRUE,
+      col = 'lavender', main = 'povertyPercent', xlab = 'povertyPercent' ) 
+boxplot(CancerRegRaw$povertyPercent)
+
+hist( CancerRegRaw$studyPerCap, breaks = sqrt( length( CancerRegRaw$studyPerCap ) ), probability = TRUE,
+      col = 'lavender', main = 'studyPerCap', xlab = 'studyPerCap' ) 
+boxplot(CancerRegRaw$studyPerCap)
+
+barplot(table(CancerRegRaw$binnedInc)) #decile
+
+```
+
+
+```{r}
+par(mfrow=c(3,2))
+hist( CancerRegRaw$MedianAge, breaks = sqrt( length( CancerRegRaw$MedianAge ) ), probability = TRUE,
+      col = 'lavender', main = 'MedianAge', xlab = 'MedianAge' ) 
+boxplot(CancerRegRaw$MedianAge)
+
+hist( CancerRegRaw$MedianAgeMale, breaks = sqrt( length( CancerRegRaw$MedianAgeMale ) ), probability = TRUE,
+      col = 'lavender', main = 'MedianAgeMale', xlab = 'MedianAgeMale' ) 
+boxplot(CancerRegRaw$MedianAgeMale)
+
+hist( CancerRegRaw$MedianAgeFemale, breaks = sqrt( length( CancerRegRaw$MedianAgeFemale ) ), probability = TRUE,
+      col = 'lavender', main = 'MedianAgeFemale', xlab = 'MedianAgeFemale' ) 
+boxplot(CancerRegRaw$MedianAgeFemale)
+
+```
+
+```{r}
+par(mfrow=c(3,2))
+
+hist( CancerRegRaw$AvgHouseholdSize, breaks = sqrt( length( CancerRegRaw$AvgHouseholdSize ) ), probability = TRUE,
+      col = 'lavender', main = 'AvgHouseholdSize', xlab = 'AvgHouseholdSize' ) 
+boxplot(CancerRegRaw$AvgHouseholdSize)
+
+hist( CancerRegRaw$PercentMarried, breaks = sqrt( length( CancerRegRaw$PercentMarried ) ), probability = TRUE,
+      col = 'lavender', main = 'PercentMarried', xlab = 'PercentMarried' ) 
+boxplot(CancerRegRaw$PercentMarried)
+
+#table(CancerRegRaw$Geography) every row is a county
+```
+
+```{r}
+par(mfrow=c(3,2))
+hist( CancerRegRaw$PctNoHS18_24, breaks = sqrt( length( CancerRegRaw$PctNoHS18_24 ) ), probability = TRUE,
+      col = 'lavender', main = 'PctNoHS18_24', xlab = 'PctNoHS18_24' ) 
+boxplot(CancerRegRaw$PctNoHS18_24)
+
+hist( CancerRegRaw$PctHS18_24, breaks = sqrt( length( CancerRegRaw$PctHS18_24 ) ), probability = TRUE,
+      col = 'lavender', main = 'PctHS18_24', xlab = 'PctHS18_24' ) 
+boxplot(CancerRegRaw$PctHS18_24)
+
+hist( CancerRegRaw$PctSomeCol18_24, breaks = sqrt( length( CancerRegRaw$PctSomeCol18_24 ) ), probability = TRUE,
+      col = 'lavender', main = 'PctSomeCol18_24', xlab = 'PctSomeCol18_24' ) 
+boxplot(CancerRegRaw$PctSomeCol18_24)
+```
+```{r}
+par(mfrow=c(3,2))
+hist( CancerRegRaw$PctBachDeg18_24, breaks = sqrt( length( CancerRegRaw$PctBachDeg18_24 ) ), probability = TRUE,
+      col = 'lavender', main = 'PctBachDeg18_24', xlab = 'PctBachDeg18_24' ) 
+boxplot(CancerRegRaw$PctBachDeg18_24)
+
+hist( CancerRegRaw$PctHS25_Over, breaks = sqrt( length( CancerRegRaw$PctHS25_Over ) ), probability = TRUE,
+      col = 'lavender', main = 'PctHS25_Over', xlab = 'PctHS25_Over' ) 
+boxplot(CancerRegRaw$PctHS25_Over)
+
+hist( CancerRegRaw$PctBachDeg25_Over, breaks = sqrt( length( CancerRegRaw$PctBachDeg25_Over ) ), probability = TRUE,
+      col = 'lavender', main = 'PctBachDeg25_Over', xlab = 'PctBachDeg25_Over' ) 
+boxplot(CancerRegRaw$PctBachDeg25_Over)
+
+```
+```{r}
+par(mfrow=c(3,2))
+hist( CancerRegRaw$PctEmployed16_Over, breaks = sqrt( length( CancerRegRaw$PctEmployed16_Over ) ), probability = TRUE,
+      col = 'lavender', main = 'PctEmployed16_Over', xlab = 'PctEmployed16_Over' ) 
+boxplot(CancerRegRaw$PctEmployed16_Over)
+
+hist( CancerRegRaw$PctUnemployed16_Over, breaks = sqrt( length( CancerRegRaw$PctUnemployed16_Over ) ), probability = TRUE,
+      col = 'lavender', main = 'PctUnemployed16_Over', xlab = 'PctUnemployed16_Over' ) 
+boxplot(CancerRegRaw$PctUnemployed16_Over)
+
+hist( CancerRegRaw$PctPrivateCoverage, breaks = sqrt( length( CancerRegRaw$PctPrivateCoverage) ), probability = TRUE,
+      col = 'lavender', main = 'PctPrivateCoverage', xlab = 'PctPrivateCoverage' ) 
+boxplot(CancerRegRaw$PctPrivateCoverage)
+
+```
+```{r}
+par(mfrow=c(3,2))
+hist( CancerRegRaw$PctPrivateCoverageAlone, breaks = sqrt( length( CancerRegRaw$PctPrivateCoverageAlone ) ), probability = TRUE,
+      col = 'lavender', main = 'PctPrivateCoverageAlone', xlab = 'PctPrivateCoverageAlone' ) 
+boxplot(CancerRegRaw$PctPrivateCoverageAlone)
+
+#plot(CancerRegRaw$PctPrivateCoverage, CancerRegRaw$PctPrivateCoverageAlone) linear relationship
+
+hist( CancerRegRaw$PctEmpPrivCoverage, breaks = sqrt( length( CancerRegRaw$PctEmpPrivCoverage ) ), probability = TRUE,
+      col = 'lavender', main = 'PctEmpPrivCoverage', xlab = 'PctEmpPrivCoverage' ) 
+boxplot(CancerRegRaw$PctEmpPrivCoverage)
+
+hist( CancerRegRaw$PctPublicCoverage, breaks = sqrt( length( CancerRegRaw$PctPublicCoverage) ), probability = TRUE,
+      col = 'lavender', main = 'PctPublicCoverage', xlab = 'PctPublicCoverage' ) 
+boxplot(CancerRegRaw$PctPublicCoverage)
+
+```
+```{r}
+par(mfrow=c(3,2))
+hist( CancerRegRaw$PctPublicCoverageAlone, breaks = sqrt( length( CancerRegRaw$PctPublicCoverageAlone ) ), probability = TRUE,
+      col = 'lavender', main = 'PctPublicCoverageAlone', xlab = 'PctPublicCoverageAlone' ) 
+boxplot(CancerRegRaw$PctPublicCoverageAlone)
+
+hist( CancerRegRaw$PctWhite, breaks = sqrt( length( CancerRegRaw$PctWhite ) ), probability = TRUE,
+      col = 'lavender', main = 'PctWhite', xlab = 'PctWhite' ) 
+boxplot(CancerRegRaw$PctWhite)
+
+hist( CancerRegRaw$PctBlack, breaks = sqrt( length( CancerRegRaw$PctBlack) ), probability = TRUE,
+      col = 'lavender', main = 'PctBlack', xlab = 'PctBlack' ) 
+boxplot(CancerRegRaw$PctBlack)
+
+```
+```{r}
+par(mfrow=c(4,2))
+hist( CancerRegRaw$PctAsian, breaks = sqrt( length( CancerRegRaw$PctAsian ) ), probability = TRUE,
+      col = 'lavender', main = 'PctAsian', xlab = 'PctAsian' ) 
+boxplot(CancerRegRaw$PctAsian)
+
+hist( CancerRegRaw$PctOtherRace, breaks = sqrt( length( CancerRegRaw$PctOtherRace ) ), probability = TRUE,
+      col = 'lavender', main = 'PctOtherRace', xlab = 'PctOtherRace' ) 
+boxplot(CancerRegRaw$PctOtherRace)
+
+hist( CancerRegRaw$PctMarriedHouseholds, breaks = sqrt( length( CancerRegRaw$PctMarriedHouseholds) ), probability = TRUE,
+      col = 'lavender', main = 'PctMarriedHouseholds', xlab = 'PctMarriedHouseholds' ) 
+boxplot(CancerRegRaw$PctMarriedHouseholds)
+
+hist( CancerRegRaw$BirthRate, breaks = sqrt( length( CancerRegRaw$BirthRate) ), probability = TRUE,
+      col = 'lavender', main = 'BirthRate', xlab = 'BirthRate' ) 
+boxplot(CancerRegRaw$BirthRate)
+
+```
+
+
+###Exploration of the meaning of the variables and new variables
+
+```{r}
+CancerRegRaw1=CancerRegRaw
+```
+
+
+1)CancerRegRaw1$PctOtherRace
+
+```{r}
+#Race
+hundred=rep(100,3047)
+race_error=round(CancerRegRaw$PctWhite+CancerRegRaw$PctBlack+CancerRegRaw$PctAsian+CancerRegRaw$PctOtherRace-hundred, 2)
+#1. can we make another variable to replace PctOtherRace, so that
+#CancerRegRaw1$PctOtherRace2 = hundred - CancerRegRaw$PctWhite-CancerRegRaw$PctBlack-CancerRegRaw$PctAsian
+```
+
+```{r}
+#ages1824, less than 100 could be still reasonable because of some people with master or phd but over 100 seems a problem
+#attention:PctSomeCol18_24 has a lot of missing values
+ages1824_error=CancerRegRaw$PctNoHS18_24+CancerRegRaw$PctHS18_24+CancerRegRaw$PctSomeCol18_24+CancerRegRaw$PctBachDeg18_24-hundred #there are many missing values
+```
+
+2) CancerRegRaw1$PctEducUnknown_ageover25
+```{r}
+#ageover25, less than 50%
+ageover25_error=CancerRegRaw$PctHS25_Over+CancerRegRaw$PctBachDeg25_Over
+#2. create a new variable to represent the group with unknown education status
+#CancerRegRaw1$PctEducUnknown_ageover25 = hundred - CancerRegRaw$PctHS25_Over-CancerRegRaw$PctBachDeg25_Over
+```
+
+3)CancerRegRaw1$PctEmployUnknown_age16
+```{r}
+#age16
+age16_error=CancerRegRaw$PctEmployed16_Over+CancerRegRaw$PctUnemployed16_Over
+#3. create a new variable to represent "other" employment status - include business owners, retirees, student etc.. 
+#CancerRegRaw1$PctEmployUnknown_age16 = hundred - CancerRegRaw$PctEmployed16_Over-CancerRegRaw$PctUnemployed16_Over
+```
+
+4)CancerRegRaw1$no_cov
+5)CancerRegRaw1$both
+```{r}
+#health coverage
+healthcoverage_error=CancerRegRaw$PctPrivateCoverage+CancerRegRaw$PctPrivateCoverageAlone+CancerRegRaw$PctEmpPrivCoverage+CancerRegRaw$PctPublicCoverage+CancerRegRaw$PctPublicCoverageAlone
+
+healthcoverage_error=CancerRegRaw$PctPrivateCoverage+CancerRegRaw$PctPublicCoverage
+
+publicnotalone=CancerRegRaw$PctPublicCoverage-CancerRegRaw$PctPublicCoverageAlone #around 20%
+
+privatenotalone=CancerRegRaw$PctPrivateCoverage-CancerRegRaw$PctPrivateCoverageAlon #around 20%
+
+privatenotalone=(CancerRegRaw$PctPrivateCoverage+CancerRegRaw$PctEmpPrivCoverage)-CancerRegRaw$PctPrivateCoverageAlon #if the corrected formula is this one, private not alone is totally higher than public not alone and it makes sense
+
+#4 create two variables to represent where groups with no health cover and groups with both private and public health cover
+#CancerRegRaw1$no_cov = hundred - CancerRegRaw$PctPublicCoverageAlone - CancerRegRaw$PctPrivateCoverage
+
+#CancerRegRaw1$both = hundred - CancerRegRaw$no_cov - CancerRegRaw$PctPublicCoverageAlone - CancerRegRaw$PctPrivateCoverageAlone
+```
+ some errors
+
+6) CancerRegRaw1$ratiodeathcancer_cancerdiagnosis
+
+```{r}
+
+CancerRegRaw$ratiodeathcancer_cancerdiagnosis=CancerRegRaw$avgDeathsPerYear/CancerRegRaw$avgAnnCount
+
+CancerRegRaw1$ratiodeathcancer_cancerdiagnosis=CancerRegRaw$avgDeathsPerYear/CancerRegRaw$avgAnnCount
+
+median(CancerRegRaw$ratiodeathcancer_cancerdiagnosis)
+cor(CancerRegRaw$ratiodeathcancer_cancerdiagnosis,CancerRegRaw$TARGET_deathRate) #pearson
+cor(CancerRegRaw$ratiodeathcancer_cancerdiagnosis,CancerRegRaw$TARGET_deathRate, method="spearman")
+
+plot(CancerRegRaw$ratiodeathcancer_cancerdiagnosis, CancerRegRaw$TARGET_deathRate)
+
+par(mfrow=c(1,2))
+hist( CancerRegRaw$ratiodeathcancer_cancerdiagnosis, breaks = sqrt( length( CancerRegRaw$ratiodeathcancer_cancerdiagnosis ) ), probability = TRUE,
+      col = 'lavender', main = 'ratiodeathcancer_cancerdiagnosis', xlab = 'ratiodeathcancer_cancerdiagnosis' ) 
+
+boxplot(CancerRegRaw$ratiodeathcancer_cancerdiagnosis)
+
+```
+bigger than 1 means that the person died without be diagnosticated. The median around 0.4 suggests that a little less than half people with cancer after die. the correlation between the target with this new variable is 0.3879499 Pears, 0.5939887 Spearm
+
+
+* ratioAvgHouseholdSize_medianIncome, really small not interesting
+```{r}
+ratioAvgHouseholdSize_medianIncome=CancerRegRaw$AvgHouseholdSize/CancerRegRaw$medIncome
+par(mfrow=c(1,2))
+hist( ratioAvgHouseholdSize_medianIncome, breaks = sqrt( length( ratioAvgHouseholdSize_medianIncome ) ), probability = TRUE,
+      col = 'lavender', main = 'ratioAvgHouseholdSize_medianIncome', xlab = 'ratioAvgHouseholdSize_medianIncome' ) 
+
+boxplot(ratioAvgHouseholdSize_medianIncome)
+
+```
+
+
+###Missing values
+
+
+2285 values for the variable "PctSomeCol18_24": 
+it is possible to calculate it with this formula
+CancerRegRaw$PctSomeCol18_24=100-(CancerRegRaw$PctNoHS18_24+CancerRegRaw$PctHS18_24+CancerRegRaw$PctBachDeg18_24)  --> REMOVE
+
+152 values for "PctEmployed16_Over":
+They can be calculated as 100-CancerRegRaw$PctUnemployed16_Over   --->
+
+609 values for "PctPrivateCoverageAlone":
+I don't understand the meanings of the covarage healthy variables
+```{r}
+2285/3047 #74%
+609/3047 #19%
+152/3047 #4%
+
+
+
+#Impute of values in missing values 
+
+CancerRegRaw1$PctPrivateCoverageAlone[is.na(CancerRegRaw1$PctPrivateCoverageAlone)] = mean(CancerRegRaw1$PctPrivateCoverageAlone, na.rm=TRUE)
+sum(is.na(CancerRegRaw1$PctPrivateCoverageAlone))
+
+```
+```{r}
+CancerRegRaw1subset=subset(CancerRegRaw1, select=-c(PctEmployed16_Over,PctSomeCol18_24))
+sum(is.na(CancerRegRaw1subset))
+```
+
+CancerRegRaw1subset is the dataset we are going to use now, with 34 variables without any missing values
+
+
+###Standardization
+```{r}
+#it is a way to standardize the variables with the range method
+library(caret)
+#Standarization 
+CancerRegPrepro <- preProcess(CancerRegRaw1subset, method=c("range"))  #range method
+CancerRegNorm <- predict(CancerRegPrepro, CancerRegRaw1subset)
+head(CancerRegNorm)
+#help(preProcess)
+```
+
+
+###Correlation analysis
+Pearson 
+
+```{r}
+str(CancerRegNorm)
+CancerRegNormnumerical=subset(CancerRegNorm, select=-c(New_State, binnedInc, Geography))
+library(knitr)
+#Pearson correlation
+corvarPearson <- round(cor(CancerRegNormnumerical),2)
+corvarPearson[corvarPearson > -0.7 & corvarPearson < 0.7] <- NA
+View(corvarPearson)
+
+#Spearman correlation
+corvarSpearman <- round(cor(CancerRegNormnumerical, method="spearman"),2)
+corvarSpearman[corvarSpearman > -0.7 & corvarSpearman < 0.7] <- NA
+View(corvarSpearman)
+
+library(corrplot)
+CorrMatrix <- data.matrix(CancerRegNormnumerical)
+corrplot(cor(CorrMatrix), diag = FALSE, order = "FPC", tl.pos = "td", tl.cex = 0.7, method ="color", type = "upper",number.cex = .6)
+
+```
+```{r}
+corrplot(cor(CorrMatrix, method="spearman"), diag = FALSE, order = "FPC", tl.pos = "td", tl.cex = 0.7, method = "color", type = "upper",number.cex = .6)
+```
+
+
+
+Pearson - Spearman
+
+avgAnnCount, avgDeathsPerYear 0.94  - 0.82
+
+avgAnnCount, popEst2015 0.93  - 0.81
+
+
+avgDeathsPerYear, popEst2015 0.98  - 0.98
+
+--->not consider avgAnnCount, avgDeathsPerYear, popEst2015
+In fact we have the new variable:
+CancerRegRaw$ratiodeathcancer_cancerdiagnosis=CancerRegRaw$avgDeathsPerYear/CancerRegRaw$avgAnnCount
+
+
+
+medIncome, povertyPercent -0.79  - 0.88
+medIncome, PctBachDeg25_Over 0.7  
+medIncome, PctPrivateCoverage 0.72  - 0.79
+medIncome, PctPrivateCoverageAlone 0.71  - 0.73
+medIncome, PctEmpPrivCoverage 0.75  - 0.76
+medIncome, PctPublicCoverage -0.75  - -0.78
+medIncome, PctPublicCoverageAlone -0.72  - -0.77
+
+
+```{r}
+require(car)
+scatterplotMatrix(subset(CancerRegNormnumerical, select=c(medIncome,povertyPercent,PctBachDeg25_Over,PctPrivateCoverage,PctPrivateCoverageAlone, PctEmpPrivCoverage,PctPublicCoverage, PctPublicCoverageAlone )))
+
+```
+
+
+povertyPercent, PctPrivateCoverage -0.82  - -0.83
+povertyPercent, PctPrivateCoverage        - -0.7
+povertyPercent, PctPublicCoverageAlone 0.8  - 0-8
+
+
+
+MedianAge, MedianAgeMale     - 0.96
+MedianAge, MedianAgeFemale     - 0.96
+
+MedianAgeMale, MedianAgeFemale 0.93  - 0.93
+
+
+----> remove MedianAgeMale, MedianAgeFemale
+
+PercentMarried, PctMarriedHouseholds 0.87  - 0.85
+
+---> remove PercentMarried
+
+PctHS24_Over, PctBachDeg25_Over -0.74  -
+
+--->remove PctBachDeg25_Over
+
+PctPrivateCoverage, PctPrivateCoverageAlone 0.83  - 0.83
+PctPrivateCoverage, PctEmpPrivCoverage 0.83  - 0.83
+PctPrivateCoverage, PctPublicCoverage -0.77  - -0.73
+PctPrivateCoverage, PctPublicCoverageAlone -0.89  - -0.88
+
+
+
+PctPrivateCoverageAlone, PctEmpPrivCoverage 0.83  - 0.82
+PctPrivateCoverageAlone, PctPublicCoverage -0.77  - -0.76
+PctPrivateCoverageAlone, PctPublicCoverageAlone -0.77  - -0.76
+
+PctEmpPrivCoverage, PctPublicCoverage -0.78  - 0.77
+PctEmpPrivCoverage, PctPublicCoverageAlone -0.73  - 0.73
+
+PctPublicCoverage, PctPublicCoverageAlone 0.87  - 0.87
+
+
+
+PctWhite, PctBlack -0.83  - 0.76
+----> delete PctWhite
+
+
+to remove we start to remove the ones with more variables and bigger correlation coefficients.
+
+```{r}
+sub1=subset(CancerRegNormnumerical, select=-c(avgAnnCount, popEst2015,MedianAgeMale, PercentMarried, PctBachDeg25_Over, PctPrivateCoverage,PctWhite, MedianAgeFemale, PctPublicCoverageAlone, medIncome, PctEmpPrivCoverage, PctPrivateCoverageAlone))
+dim(sub1)
+dim(CancerRegNormnumerical)
+31-18 #12 variables are removed
+
+#Pearson correlation
+corvarPearson <- round(cor(sub1),2)
+corvarPearson[corvarPearson > -0.7 & corvarPearson < 0.7] <- NA
+View(corvarPearson)
+
+#Spearman correlation
+corvarSpearman <- round(cor(sub1, method="spearman"),2)
+corvarSpearman[corvarSpearman > -0.7 & corvarSpearman < 0.7] <- NA
+View(corvarSpearman)
+
+
+```
+
+
+###Naive linear model with continuous target
+
+
+```{r}
+modlin=lm(TARGET_deathRate~., data=subdata)
+anova(modlin)
+
+modauto=step(modlin, direction = "both")
+anova(modauto)
+
+variables=subset(subdata, select=c(TARGET_deathRate,avgDeathsPerYear , incidenceRate , medIncome , povertyPercent , AvgHouseholdSize ,PctNoHS18_24 , PctHS18_24, PctBachDeg18_24 , PctHS25_Over , PctUnemployed16_Over , PctPublicCoverage ,PctBlack , PctAsian , PctOtherRace , PctMarriedHouseholds , BirthRate, New_State))
+
+rankMM(variables)
+
+#Pearson correlation
+corvarPearson <- round(cor(variables),2)
+corvarPearson[corvarPearson > -0.7 & corvarPearson < 0.7] <- NA
+View(corvarPearson)
+
+#Spearman correlation
+corvarSpearman <- round(cor(variables, method="spearman"),2)
+corvarSpearman[corvarSpearman > -0.7 & corvarSpearman < 0.7] <- NA
+View(corvarSpearman)
+
+modlin=lm(TARGET_deathRate~., data=variables)
+anova(modlin)
+```
+
+
+###Improve the linear model trying various transformation and verifying that all the hyps are verified
+
+```{r}
+summary(CancerRegNorm)
+install.packages("keep")
+install.packages("bestNormalize")
+
+library(bestNormalize)
+#Density Plots
+library(ggplot2)
+library(purrr)
+library(tidyr)
+
+
+#visualizing the ditrib of the normalized variables
+
+CancerRegNorm %>%
+  keep(is.numeric) %>% 
+  gather() %>%
+  ggplot(aes(value)) +
+  facet_wrap(~ key, scales = "free") + 
+  geom_density() 
+
+#Histogram Plots
+CancerRegNorm %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_histogram()
+
+```
+
+
+BestNormalize transformation
+
+```{r}
+CancerRegNormTestNumeric=subset(CancerRegRaw1subset, select=-c(Geography, binnedInc, New_State))
+CancerRegNormTestNumeric <- as.data.frame(CancerRegNormTestNumeric)
+
+library(bestNormalize)
+
+p <- ncol(CancerRegNormTestNumeric)
+CancerRegNormTransf = matrix(data=0,nrow=n, ncol =p )
+for (k in 1:p){
+
+   c <- bestNormalize(CancerRegNormTestNumeric[,k], standardize = TRUE)
+    CancerRegNormTransf[,k]= c$x.t
+  
+}
+
+c$chosen_transform
+c$other_transforms
+summary(c)
+
+CancerRegNormTransf1=as.data.frame(CancerRegNormTransf)
+str(CancerRegNormTransf1)
+names(CancerRegNormTransf1)=names(CancerRegNormTestNumeric)
+
+
+CancerRegNormTest <- CancerRegRaw1subset
+CancerRegRaw1subset
+head(CancerRegRaw1subset)
+
+str(CancerRegNormTest)
+CancerRegNormTest=as.data.frame(CancerRegNormTest)
+
+n <- nrow(CancerRegNormTest)
+p <- ncol(CancerRegNormTest)
+str(trans$x.t)
+c=bestNormalize(CancerRegNormTest[,2], standardize = FALSE)
+    transf[,2]=c$x.t
+
+#Histogram Plots
+CancerRegNormTransf1 %>%
+ keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_histogram()
+
+summary(CancerRegNormTestNumeric)
+summary(CancerRegNormTransf1)
+
+
+str(CancerRegRaw1subset)
+summary (CancerRegRaw1subset)
+
+
+#Histogram Plots
+CancerRegRaw1subset %>%
+ keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_histogram()
+
+#Histogram Plots
+CancerRegNormTransf %>%
+ keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_histogram()
+```
+
+```{r}
+#Data Frame with Raw data no multicoll
+
+DFModelRaw = subset(CancerRegRaw1subset, select=-c(avgAnnCount, ratiodeathcancer_cancerdiagnosis, popEst2015,MedianAgeMale, PercentMarried, PctBachDeg25_Over, PctPrivateCoverage,PctWhite, MedianAgeFemale, PctPublicCoverageAlone, PctEmpPrivCoverage, PctPrivateCoverageAlone, povertyPercent, Geography, binnedInc, AvgHouseholdSize, BirthRate))
+
+str(DFModelRaw)
+
+
+#Data Frame with Scale data no multicoll
+
+DFModelScale0 = subset(CancerRegRaw1subset, select=-c(avgAnnCount, ratiodeathcancer_cancerdiagnosis, popEst2015,MedianAgeMale, PercentMarried, PctBachDeg25_Over, PctPrivateCoverage,PctWhite, MedianAgeFemale, PctPublicCoverageAlone, PctEmpPrivCoverage, PctPrivateCoverageAlone, povertyPercent, Geography, binnedInc, AvgHouseholdSize, BirthRate, New_State))
+
+library(caret)
+
+DFModelScale <-  as.data.frame(scale(DFModelScale0), center = TRUE, scale = TRUE)
+DFModelScale$New_State <- CancerRegRaw1subset$New_State
+
+str(DFModelScale)
+#removing vars due to multi colli
+CancerRegNormTransfNoColi <- subset(CancerRegNormTransf, select=-c(avgAnnCount, ratiodeathcancer_cancerdiagnosis, popEst2015,MedianAgeMale, PercentMarried, PctBachDeg25_Over, PctPrivateCoverage,PctWhite, MedianAgeFemale, PctPublicCoverageAlone, PctEmpPrivCoverage, PctPrivateCoverageAlone, povertyPercent))
+
+#adding new state
+CancerRegNormTransfNoColi$New_State <- CancerRegRaw1subset$New_State
+
+
+
+```
+
+Trying other linearm models
+```{r}
+#Model Selection base on stepwise 
+
+stepAIC(lm(TARGET_deathRate ~. , data =CancerRegNormTransfNoColi), direction = "both")
+
+#Lowsest AIC
+
+lmodelrev1 <- lm(formula = TARGET_deathRate ~ avgDeathsPerYear + incidenceRate + 
+    medIncome + MedianAge + AvgHouseholdSize + PctHS18_24 + PctBachDeg18_24 + 
+    PctHS25_Over + PctUnemployed16_Over + PctPublicCoverage + 
+    PctAsian + PctOtherRace + PctMarriedHouseholds + BirthRate + 
+    New_State, data = CancerRegNormTransfNoColi)
+
+
+#removing outliers
+library(car)
+outlierTest(lmodelrev1)
+
+CancerRegNormTransfNoColiOutliers <- CancerRegNormTransfNoColi[-c(1424,349,953,2465),]
+```
+
+```{r}
+#Same model without outliers 
+
+lmodelrev2 <- lm(formula = TARGET_deathRate ~ avgDeathsPerYear + incidenceRate + 
+    medIncome + MedianAge + AvgHouseholdSize + PctHS18_24 + PctBachDeg18_24 + 
+    PctHS25_Over + PctUnemployed16_Over + PctPublicCoverage + 
+    PctAsian + PctOtherRace + PctMarriedHouseholds + BirthRate + 
+    New_State, data = CancerRegNormTransfNoColiOutliers)
+
+summary(lmodelrev2)
+
+```
+
+```{r}
+
+##ASSUMPTIONS CHECK. Model: lmodelrev2 (Go-No Go)
+
+#H1: Linear in parameters 
+
+lmodelrev2 <- lm(formula = TARGET_deathRate ~ avgDeathsPerYear + incidenceRate + 
+    medIncome + MedianAge + AvgHouseholdSize + PctHS18_24 + PctBachDeg18_24 + 
+    PctHS25_Over + PctUnemployed16_Over + PctPublicCoverage + 
+    PctAsian + PctOtherRace + PctMarriedHouseholds + BirthRate + 
+    New_State, data = CancerRegNormTransfNoColiOutliers)
+
+  ##Result: Go
+```
+
+```{r}
+#H2: No perfect colinearity
+CancerRegNormTransfNoColiOutliersLMVars <-  subset(CancerRegNormTransfNoColiOutliers, select = c(avgDeathsPerYear , incidenceRate , 
+    medIncome , MedianAge , AvgHouseholdSize , PctHS18_24 , PctBachDeg18_24 , 
+    PctHS25_Over , PctUnemployed16_Over , PctPublicCoverage , 
+    PctAsian , PctOtherRace , PctMarriedHouseholds , BirthRate ))
+summary(CancerRegNormTransfNoColiOutliersLMVars)
+str(CancerRegNormTransfNoColiOutliersLMVars)
+
+plot(vif(CancerRegNormTransfNoColiOutliersLMVars),type="p",  las=2, cex.axis=0.7, xlab=' ')
+axis(side=2)
+help(plot)
+CorrMatrix <- data.matrix(CancerRegNormTransfNoColiOutliersLMVars)
+corrplot(cor(CorrMatrix), method = "number", order = "hclust", addrect = 2,tl.cex = 0.7, number.cex = .5)
+corrplot(cor(CorrMatrix), diag = FALSE, order = "FPC", tl.pos = "td", tl.cex = 0.7, method = "number", type = "upper",number.cex = .6)
+  #Result: Go
+```
+
+```{r}
+
+#H3: Zero conditional mean
+
+plot(lmodelrev2$residuals)
+abline(h = mean(lmodelrev2$residuals), col="red")
+abline(h = sd(lmodelrev2$residuals), col="blue")
+abline(h = -sd(lmodelrev2$residuals), col="blue")
+var(lmodelrev2$residuals)
+mean(lmodelrev2$residuals)
+help(abline)
+  #Result: Go
+```
+
+```{r}
+#H4: Homoscedasticity
+
+
+bptest(lmodelrev2)
+gvlma(lmodelrev2)
+ncvTest(lmodelrev2)
+plot(lmodelrev2)
+
+spreadLevelPlot(lmodelrev2)
+  #Result: Go
+```
+
+```{r}
+#H5: No correlation of the errors
+
+CorrMatrixResiduals <- data.matrix(lmodelrev2$residuals)
+Chiplot(lmodelrev2$residuals)
+##Pending
+
+
+res = lmodelrev2$residuals
+n = length(res) 
+mod2 = lm(res[-n] ~ res[-1]) 
+summary(mod2)
+
+
+```
+
+```{r}
+#H6: Normality
+
+#Visual Tests
+
+hist(lmodelrev2$residuals)
+truehist(lmodelrev2$residuals)
+help(abline)
+
+ggdensity(lmodelrev2$residuals)
+          
+qqnorm(lmodelrev2$residuals)
+qqline(lmodelrev2$residuals)
+ #Result: Go
+
+#normality test
+shapiro.test(lmodelrev2$residuals)
+#Result: No Go
+```
+
+```{r}
+#Creating new models just Raw and Scale just for interpretation of the Coeff
+
+
+lmodelRaw <- lm(formula = TARGET_deathRate ~ avgDeathsPerYear + incidenceRate + 
+    medIncome + MedianAge  + PctHS18_24 + PctBachDeg18_24 + 
+    PctHS25_Over + PctUnemployed16_Over + PctPublicCoverage + 
+    PctAsian + PctOtherRace + PctMarriedHouseholds  + 
+    New_State, data = DFModelRaw)
+
+
+lmodelScale <- lm(formula = TARGET_deathRate ~ avgDeathsPerYear + incidenceRate + 
+    medIncome + MedianAge  + PctHS18_24 + PctBachDeg18_24 + 
+    PctHS25_Over + PctUnemployed16_Over + PctPublicCoverage + 
+    PctAsian + PctOtherRace + PctMarriedHouseholds  + 
+    New_State, data = DFModelScale)
+
+summary(lmodelRaw)
+summary(lmodelScale)
+
+```
+
+
+###Binary models
+
+
+discrete target variable, using the Q3
+
+```{r}
+str(CancerRegNorm)
+CancerRegNorm$BinaryTarget=0
+hist(CancerRegNorm$TARGET_deathRate)
+q2=quantile(CancerRegNorm$TARGET_deathRate)[3]
+
+for(k in 1:3045){
+  
+  if(CancerRegNorm$TARGET_deathRate[k]>=q2){
+  CancerRegNorm$BinaryTarget[k]=1
+  }
+  else{CancerRegNorm$BinaryTarget[k]=0}
+  
+}
+
+CancerRegNorm$BinaryTarget=as.factor(CancerRegNorm$BinaryTarget)
+View(CancerRegNorm$BinaryTarget)
+table(CancerRegNorm$BinaryTarget) # 0 1521  1 1526  
+
+str(CancerRegNorm)
+
+```
+
+###Logit model
+
+```{r}
+library(robustbase)
+subdata1=subset(CancerRegNorm, select=-c(Geography, binnedInc, TARGET_deathRate))
+
+modlog = glm( BinaryTarget ~ ., family = binomial( link = "logit" ), data=subdata1 ) #logit( pi ) ) = beta1 + beta2*x ecc
+modautosel=step(modlog, direction = "both")
+
+summary(modautosel)
+
+modlog$linear.predictors
+modlog$fitted.values
+logLik( modlog)
+-2 * logLik(modlog)
+deviance(modlog)
+```
+
+BinaryTarget ~ New_State + avgAnnCount + avgDeathsPerYear + incidenceRate + 
+    popEst2015 + povertyPercent + MedianAgeMale + PercentMarried + 
+    PctHS18_24 + PctBachDeg25_Over + PctUnemployed16_Over + PctPrivateCoverageAlone + 
+    PctEmpPrivCoverage + PctPublicCoverage + PctPublicCoverageAlone + 
+    PctOtherRace + PctMarriedHouseholds + BirthRate
+
+```{r}
+variables2=subset(subdata, select=c(BinaryTarget, New_State, avgDeathsPerYear, incidenceRate , povertyPercent, MedianAgeMale,  
+    PctHS18_24, PctBachDeg25_Over, PctUnemployed16_Over, PctPrivateCoverageAlone, 
+    PctEmpPrivCoverage,PctPublicCoverageAlone, 
+    PctOtherRace , PctMarriedHouseholds ,BirthRate))
+
+variables2num=subset(variables2, select=-c(BinaryTarget, New_State))
+
+#Pearson correlation
+corvarPearson <- round(cor(variables2num),2)
+corvarPearson[corvarPearson > -0.7 & corvarPearson < 0.7] <- NA
+View(corvarPearson)
+
+#Spearman correlation
+corvarSpearman <- round(cor(variables2num, method="spearman"),2)
+corvarSpearman[corvarSpearman > -0.7 & corvarSpearman < 0.7] <- NA
+View(corvarSpearman)
+
+
+#H2: rank max
+
+rankMM(variables2num) #13 max
+
+variables2$New_State <- relevel (variables1$New_State, ref="Delaware")
+
+##H1: logit is a linear model, pi is not linear
+
+modlog1 = glm( BinaryTarget ~ ., family = binomial( link = "logit" ), data=variables2 ) #logit( pi ) ) = beta1 + beta2*x ecc
+summary(modlog1)
+#modlog$linear.predictors
+#modlog$fitted.values
+logLik( modlog1)
+-2 * logLik(modlog1)
+deviance(modlog1)
+
+
+## CIs using profiled log-likelihood
+CIlog=confint(modlog1)
+
+## CIs using standard errors
+CIse=confint.default(modlog1)
+
+
+## Wald
+library(aod)
+library(ggplot2)
+wald.test(b = coef(modlog1), Sigma = vcov(modlog1), Terms = 3:14)
+
+## odds ratios only
+oddsratio=exp(coef(modlog1))
+
+#marginal effects
+library(mfx) 
+marginal=logitmfx(BinaryTarget ~ ., data=variables2 ) 
+marginal
+
+#H4: Homoscedasticity
+library(het.test)
+library(lmtest)
+library(gvlma)
+bptest(modlog1 , data=variables2) #is heterosk
+
+
+
+grid = ( min(variables2num) : max(variables2num))
+Y = predict( modlog1, data.frame( variables2), se = TRUE )
+gl$linkinv( Y$fit )  #give the pi, doing the inverse of the logit function
+gl$linkinv( Y$fit - 1.96 * Y$se )
+gl$linkinv( Y$fit + 1.96 * Y$se )
+
+
+
+
+#H3: Zero conditional mean
+
+plot(modlog1$residuals, xlab="Observations", ylab="Residuals")
+abline(h = mean(modlog1$residuals), col="red")
+abline(h = sd(modlog1$residuals), col="blue")
+abline(h = -sd(modlog1$residuals), col="blue")
+var(modlog1$residuals)
+mean(modlog1$residuals)
+
+
+#H5: No correlation of the errors
+
+
+
+#H6: Normality
+
+#Visual Tests
+
+hist(modlog1$residuals)
+
+qqnorm(modlog1$residuals)
+qqline(modlog1$residuals)
+
+#normality test
+shapiro.test(modlog1$residuals)
+
+
+
+```
+
+###Probit
+
+```{r}
+modprob1 = glm( BinaryTarget ~ ., family = binomial( link = "probit" ), data=variables2 ) #phi( pi ) ) = beta1 + beta2*x ecc
+summary(modprob1)
+#modlog$linear.predictors
+#modlog$fitted.values
+logLik( modprob1)
+-2 * logLik(modprob1)
+deviance(modprob1)
+
+
+#H4: Homoscedasticity
+library(het.test)
+library(lmtest)
+library(gvlma)
+bptest(modprob1 , data=variables2) #is heterosk
+
+
+
+grid = ( min(variables2num) : max(variables2num))
+Y = predict( modprob1, data.frame( variables2), se = TRUE )
+gl$linkinv( Y$fit )  #give the pi, doing the inverse of the logit function
+gl$linkinv( Y$fit - 1.96 * Y$se )
+gl$linkinv( Y$fit + 1.96 * Y$se )
+
+
+
+
+#H3: Zero conditional mean
+
+plot(modlog1modprob1$residuals, xlab="Observations", ylab="Residuals")
+abline(h = mean(modprob1$residuals), col="red")
+abline(h = sd(modprob1$residuals), col="blue")
+abline(h = -sd(modprob1$residuals), col="blue")
+var(modprob1$residuals)
+mean(modprob1$residuals)
+
+
+#H5: No correlation of the errors
+
+
+
+#H6: Normality
+
+#Visual Tests
+
+hist(modprob1$residuals)
+
+qqnorm(modprob1$residuals)
+qqline(modprob1$residuals)
+
+#normality test
+shapiro.test(modprob1$residuals)
+
+```
